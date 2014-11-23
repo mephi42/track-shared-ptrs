@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-import gdb
 import logging
 import json
 import os
+import re
+
+import gdb
 
 
 def gdb_run():
@@ -32,23 +34,45 @@ def parse_log_level(level):
 
 
 class Backtrace:
+    SHARED_PTR_REGEX = re.compile("^std::__shared_ptr")
+    ACQUIRE = "acquire"
+    RELEASE = "release"
+
     def __init__(self, type):
         self.type = type
         self.lines = []
+        self.shared_ptr_address_str = None
+        self.shared_ptr_function_str = None
         frame = gdb.newest_frame()
         while frame is not None:
             sal = frame.find_sal()
             filename = sal.symtab.filename
             line = sal.line
-            location = filename + ":" + str(line)
-            self.lines.append(str(frame.function()) + " at " + location)
+            function_str = str(frame.function())
+            location_str = filename + ":" + str(line)
+            self.lines.append(function_str + " at " + location_str)
+            if self.shared_ptr_address_str is None:
+                if Backtrace.SHARED_PTR_REGEX.match(function_str):
+                    self.shared_ptr_address_str = str(frame.read_var("this"))
+                    self.shared_ptr_function_str = function_str
             frame = frame.older()
+        if self.shared_ptr_address_str is None:
+            raise RuntimeError(
+                "Cannot derive shared_ptr instance from backtrace\n" +
+                str(self))
 
     def export(self):
         return {
             "type": self.type,
+            "shared_ptr": {
+                "address": self.shared_ptr_address_str,
+                "function": self.shared_ptr_function_str
+            },
             "lines": self.lines
         }
+
+    def __str__(self):
+        return json.dumps(self.export(), indent=4)
 
 
 class SpCountedBase:
@@ -61,21 +85,34 @@ class SpCountedBase:
     def __init__(self):
         self.address = gdb.parse_and_eval("this")
         self.use_count = 1
-        self.backtraces = [Backtrace("init")]
+        self.backtraces = [Backtrace(Backtrace.ACQUIRE)]
         logging.debug("__init__(%s)", self.address)
 
     def add_ref_copy(self):
         logging.debug("add_ref_copy(%s)", self.address)
-        self.backtraces.append(Backtrace("acquire"))
+        self.backtraces.append(Backtrace(Backtrace.ACQUIRE))
 
     def add_ref_lock(self):
         logging.debug("add_ref_lock(%s)", self.address)
-        self.backtraces.append(Backtrace("acquire"))
+        self.backtraces.append(Backtrace(Backtrace.ACQUIRE))
 
     def release(self):
         logging.debug("release(%s)", self.address)
-        self.backtraces.append(Backtrace("release"))
+        backtrace = Backtrace(Backtrace.RELEASE)
+        if not self.__annihilate_backtrace(backtrace):
+            self.backtraces.append(backtrace)
         self.use_count = SpCountedBase.__use_count()
+
+    def __annihilate_backtrace(self, backtrace):
+        needle = backtrace.shared_ptr_address_str
+        i = len(self.backtraces) - 1
+        while i >= 0:
+            if self.backtraces[i].shared_ptr_address_str == needle and \
+                    self.backtraces[i].type == Backtrace.ACQUIRE:
+                del self.backtraces[i]
+                return True
+            i -= 1
+        return False
 
     @staticmethod
     def __use_count():

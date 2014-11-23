@@ -4,11 +4,16 @@ import unittest
 import json
 
 
+the_file = os.path.abspath(__file__)
+
+
 class Test(unittest.TestCase):
     REPORT = "tracked-shared-ptrs"
 
     def setUp(self):
-        self.rootDir = os.path.dirname(os.path.dirname(__file__))
+        self.testDir = os.path.dirname(the_file)
+        os.chdir(self.testDir)
+        self.rootDir = os.path.dirname(self.testDir)
         self.launcher = os.path.join(self.rootDir, "track-shared-ptrs")
         self.assertEqual(0, os.system("make all"))
         if os.path.exists(Test.REPORT):
@@ -24,6 +29,7 @@ class Test(unittest.TestCase):
         with open(Test.REPORT, "r") as f:
             report = json.load(f)
         self.assertFalse(report["success"])
+        self.assertEqual(3, report["instances-created"])
         self.assertEqual(2, len(report["instances"]))
 
     def test_flake8(self):
@@ -33,3 +39,7 @@ class Test(unittest.TestCase):
         absSources = lambda p: os.path.join(self.rootDir, p)
         command = ["flake8"] + map(absSources, sources)
         self.assertEqual(0, os.system(" ".join(command)))
+
+
+if __name__ == '__main__':
+    unittest.main()

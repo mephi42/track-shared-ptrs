@@ -8,6 +8,7 @@ parser.add_argument("--report", nargs=1, default="tracked-shared-ptrs")
 parser.add_argument("command", nargs="+")
 args = parser.parse_args()
 command = ["gdb",
+           "-batch",
            "-ex", "source " + __file__ + ".py",
            "-ex", "python-log-level " + args.log,
            "-ex", "track-shared-ptrs " + args.report,
