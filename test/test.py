@@ -36,8 +36,8 @@ class Test(unittest.TestCase):
         sources = ["track-shared-ptrs",
                    "track-shared-ptrs.py",
                    "test/test.py"]
-        absSources = lambda p: os.path.join(self.rootDir, p)
-        command = ["flake8"] + map(absSources, sources)
+        abs_sources = lambda p: os.path.join(self.rootDir, p)
+        command = ["flake8"] + map(abs_sources, sources)
         self.assertEqual(0, os.system(" ".join(command)))
 
 

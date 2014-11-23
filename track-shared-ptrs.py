@@ -38,8 +38,8 @@ class Backtrace:
     ACQUIRE = "acquire"
     RELEASE = "release"
 
-    def __init__(self, type):
-        self.type = type
+    def __init__(self, tpe):
+        self.tpe = tpe
         self.lines = []
         self.shared_ptr_address_str = None
         self.shared_ptr_function_str = None
@@ -63,7 +63,7 @@ class Backtrace:
 
     def export(self):
         return {
-            "type": self.type,
+            "type": self.tpe,
             "shared_ptr": {
                 "address": self.shared_ptr_address_str,
                 "function": self.shared_ptr_function_str
@@ -108,7 +108,7 @@ class SpCountedBase:
         i = len(self.backtraces) - 1
         while i >= 0:
             if self.backtraces[i].shared_ptr_address_str == needle and \
-                    self.backtraces[i].type == Backtrace.ACQUIRE:
+                    self.backtraces[i].tpe == Backtrace.ACQUIRE:
                 del self.backtraces[i]
                 return True
             i -= 1
