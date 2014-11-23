@@ -4,4 +4,5 @@ Usage:
 
 ```
   track-shared-ptrs COMMAND [ARGS...]
+  less tracked-shared-ptrs
 ```
