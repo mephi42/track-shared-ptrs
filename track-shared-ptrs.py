@@ -93,6 +93,8 @@ class Tracker:
     def __init__(self, report_file):
         # dict from str(_Sp_counted_base address) to usage data (SpCountedBase)
         self.__instances = {}
+        # overall number of created instances
+        self.__instances_created = 0
         if len(report_file) == 0:
             report_file = "tracked-shared-ptrs"
         self.__reportFile = os.path.abspath(report_file)
@@ -103,6 +105,7 @@ class Tracker:
         if address_str in self.__instances:
             raise RuntimeError(address_str + " already exists")
         self.__instances[address_str] = result
+        self.__instances_created += 1
         return result
 
     def current_or_none(self):
@@ -128,7 +131,8 @@ class Tracker:
         result = {
             "success": len(self.__instances) == 0,
             "instances": list(map(lambda instance: instance.export(),
-                                  self.__instances.values()))
+                                  self.__instances.values())),
+            "instances-created": self.__instances_created
         }
         with open(self.__reportFile, "w") as f:
             json.dump(result, f, indent=4)

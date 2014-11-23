@@ -3,6 +3,7 @@
 Usage:
 
 ```
-  track-shared-ptrs COMMAND [ARGS...]
+  ./track-shared-ptrs COMMAND [ARGS...]
+  reset
   less tracked-shared-ptrs
 ```
