@@ -1,10 +1,9 @@
 #!/usr/bin/env python
+import gdb
 import json
 import logging
 import os
 import re
-
-import gdb
 
 
 def gdb_run():
@@ -17,6 +16,18 @@ def gdb_continue():
 
 def gdb_quit():
     gdb.execute("quit")
+
+
+def gdb_breakpoint(spec, handler):
+    class Breakpoint(gdb.Breakpoint):
+        def __init__(self):
+            gdb.Breakpoint.__init__(self, spec)
+
+        def stop(self):
+            handler()
+            gdb.post_event(gdb_continue)
+
+    return Breakpoint()
 
 
 def parse_log_level(level):
@@ -45,11 +56,14 @@ class Backtrace:
         self.shared_ptr_function_str = None
         frame = gdb.newest_frame()
         while frame is not None:
-            sal = frame.find_sal()
-            filename = sal.symtab.filename
-            line = sal.line
             function_str = str(frame.function())
-            location_str = filename + ":" + str(line)
+            sal = frame.find_sal()
+            if sal.symtab is None:
+                location_str = "???"
+            else:
+                filename = sal.symtab.filename
+                line = sal.line
+                location_str = filename + ":" + str(line)
             self.lines.append(function_str + " at " + location_str)
             if self.shared_ptr_address_str is None:
                 if Backtrace.SHARED_PTR_REGEX.match(function_str):
@@ -79,7 +93,8 @@ class SpCountedBase:
     CLASS_NAME = "std::_Sp_counted_base<(__gnu_cxx::_Lock_policy)2>"
     CONSTRUCTOR_NAME = CLASS_NAME + "::_Sp_counted_base()"
     ADD_REF_COPY_NAME = CLASS_NAME + "::_M_add_ref_copy()"
-    ADD_REF_LOCK_NAME = CLASS_NAME + "::_M_add_ref_lock_nothrow()"
+    ADD_REF_LOCK_NAME = CLASS_NAME + "::_M_add_ref_lock()"
+    ADD_REF_LOCK_NOTHROW_NAME = CLASS_NAME + "::_M_add_ref_lock_nothrow()"
     RELEASE_NAME = CLASS_NAME + "::_M_release()"
 
     def __init__(self):
@@ -158,6 +173,14 @@ class Tracker:
             raise RuntimeError(address_str + " does not exist")
         return result
 
+    def add_ref_copy_current(self):
+        self.current().add_ref_copy()
+
+    def add_ref_lock_current(self):
+        current = self.current_or_none()
+        if current is not None:
+            current.add_ref_lock()
+
     def release_current(self):
         current = self.current()
         current.release()
@@ -177,48 +200,6 @@ class Tracker:
         gdb.post_event(gdb_quit)
 
 
-class ConstructorBreakpoint(gdb.Breakpoint):
-    def __init__(self, tracker):
-        gdb.Breakpoint.__init__(self, SpCountedBase.CONSTRUCTOR_NAME)
-        self.tracker = tracker
-
-    def stop(self):
-        self.tracker.new()
-        gdb.post_event(gdb_continue)
-
-
-class AddRefCopyBreakpoint(gdb.Breakpoint):
-    def __init__(self, tracker):
-        gdb.Breakpoint.__init__(self, SpCountedBase.ADD_REF_COPY_NAME)
-        self.tracker = tracker
-
-    def stop(self):
-        self.tracker.current().add_ref_copy()
-        gdb.post_event(gdb_continue)
-
-
-class AddRefLockBreakpoint(gdb.Breakpoint):
-    def __init__(self, tracker):
-        gdb.Breakpoint.__init__(self, SpCountedBase.ADD_REF_LOCK_NAME)
-        self.tracker = tracker
-
-    def stop(self):
-        current = self.tracker.current_or_none()
-        if current is not None:
-            current.add_ref_lock()
-        gdb.post_event(gdb_continue)
-
-
-class ReleaseBreakpoint(gdb.Breakpoint):
-    def __init__(self, tracker):
-        gdb.Breakpoint.__init__(self, SpCountedBase.RELEASE_NAME)
-        self.tracker = tracker
-
-    def stop(self):
-        self.tracker.release_current()
-        gdb.post_event(gdb_continue)
-
-
 class PythonLogLevelCommand(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, "python-log-level", gdb.COMMAND_NONE)
@@ -233,10 +214,16 @@ class TrackSharedPtrsCommand(gdb.Command):
 
     def invoke(self, argument, from_tty):
         tracker = Tracker(argument)
-        ConstructorBreakpoint(tracker)
-        AddRefCopyBreakpoint(tracker)
-        AddRefLockBreakpoint(tracker)
-        ReleaseBreakpoint(tracker)
+        gdb_breakpoint(SpCountedBase.CONSTRUCTOR_NAME,
+                       tracker.new)
+        gdb_breakpoint(SpCountedBase.ADD_REF_COPY_NAME,
+                       tracker.add_ref_copy_current)
+        gdb_breakpoint(SpCountedBase.ADD_REF_LOCK_NAME,
+                       tracker.add_ref_lock_current)
+        gdb_breakpoint(SpCountedBase.ADD_REF_LOCK_NOTHROW_NAME,
+                       tracker.add_ref_lock_current)
+        gdb_breakpoint(SpCountedBase.RELEASE_NAME,
+                       tracker.release_current)
         gdb.events.exited.connect(tracker.on_exit)
         gdb_run()
 
