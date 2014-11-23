@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import logging
 import json
+import logging
 import os
 import re
 
@@ -107,8 +107,8 @@ class SpCountedBase:
         needle = backtrace.shared_ptr_address_str
         i = len(self.backtraces) - 1
         while i >= 0:
-            if self.backtraces[i].shared_ptr_address_str == needle and \
-                    self.backtraces[i].tpe == Backtrace.ACQUIRE:
+            if (self.backtraces[i].shared_ptr_address_str == needle and
+                    self.backtraces[i].tpe == Backtrace.ACQUIRE):
                 del self.backtraces[i]
                 return True
             i -= 1
@@ -221,7 +221,7 @@ class ReleaseBreakpoint(gdb.Breakpoint):
 
 class PythonLogLevelCommand(gdb.Command):
     def __init__(self):
-        gdb.Command.__init__(self, "python-log-level", gdb.COMMAND_USER)
+        gdb.Command.__init__(self, "python-log-level", gdb.COMMAND_NONE)
 
     def invoke(self, argument, from_tty):
         logging.basicConfig(level=parse_log_level(argument))
@@ -229,7 +229,7 @@ class PythonLogLevelCommand(gdb.Command):
 
 class TrackSharedPtrsCommand(gdb.Command):
     def __init__(self):
-        gdb.Command.__init__(self, "track-shared-ptrs", gdb.COMMAND_USER)
+        gdb.Command.__init__(self, "track-shared-ptrs", gdb.COMMAND_NONE)
 
     def invoke(self, argument, from_tty):
         tracker = Tracker(argument)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
+import json
 import os
 import unittest
-import json
 
 
 the_file = os.path.abspath(__file__)
